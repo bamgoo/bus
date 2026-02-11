@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -185,7 +186,57 @@ func (m *busModule) RegisterService(name string) {
 	m.mutex.Unlock()
 }
 
-func (m *busModule) Config(base.Map) {}
+func (m *busModule) Config(global base.Map) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if m.opened || m.started {
+		return
+	}
+
+	cfgAny, ok := global["bus"]
+	if !ok {
+		return
+	}
+	cfgMap, ok := castToMap(cfgAny)
+	if !ok || cfgMap == nil {
+		return
+	}
+
+	rootConfig := base.Map{}
+	for key, val := range cfgMap {
+		if conf, ok := castToMap(val); ok && key != "setting" {
+			m.configure(key, conf)
+		} else {
+			rootConfig[key] = val
+		}
+	}
+	if len(rootConfig) > 0 {
+		m.configure(bamgoo.DEFAULT, rootConfig)
+	}
+}
+
+func (m *busModule) configure(name string, conf base.Map) {
+	cfg := Config{}
+	if existing, ok := m.configs[name]; ok {
+		cfg = existing
+	}
+
+	if v, ok := conf["driver"].(string); ok && v != "" {
+		cfg.Driver = v
+	}
+	if v, ok := conf["prefix"].(string); ok {
+		cfg.Prefix = v
+	}
+	if v, ok := parseWeight(conf["weight"]); ok {
+		cfg.Weight = v
+	}
+	if v, ok := castToMap(conf["setting"]); ok {
+		cfg.Setting = v
+	}
+
+	m.configs[name] = cfg
+}
 
 // Setup initializes defaults.
 func (m *busModule) Setup() {
@@ -496,4 +547,30 @@ func (m *busModule) Stats() []bamgoo.ServiceStats {
 		}
 	}
 	return all
+}
+
+func castToMap(value base.Any) (base.Map, bool) {
+	switch v := value.(type) {
+	case base.Map:
+		return v, true
+	default:
+		return nil, false
+	}
+}
+
+func parseWeight(value base.Any) (int, bool) {
+	switch v := value.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	case string:
+		n, err := strconv.Atoi(v)
+		if err == nil {
+			return n, true
+		}
+	}
+	return 0, false
 }
