@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,7 +25,7 @@ var (
 		configs:     make(map[string]Config, 0),
 		connections: make(map[string]Connection, 0),
 		weights:     make(map[string]int, 0),
-		services:    make(map[string]struct{}, 0),
+		services:    make(map[string]serviceMeta, 0),
 	}
 	host = bamgoo.Mount(module)
 )
@@ -51,6 +53,8 @@ type (
 		Enqueue(subject string, data []byte) error
 
 		Stats() []bamgoo.ServiceStats
+		ListNodes() []bamgoo.NodeInfo
+		ListServices() []bamgoo.ServiceInfo
 	}
 
 	busModule struct {
@@ -61,7 +65,7 @@ type (
 		connections map[string]Connection
 		weights     map[string]int
 		wrr         *util.WRR
-		services    map[string]struct{}
+		services    map[string]serviceMeta
 
 		opened  bool
 		started bool
@@ -80,6 +84,11 @@ type (
 	}
 
 	Configs map[string]Config
+
+	serviceMeta struct {
+		name string
+		desc string
+	}
 )
 
 const (
@@ -116,7 +125,15 @@ func (m *busModule) Register(name string, value base.Any) {
 	case Configs:
 		m.RegisterConfigs(v)
 	case bamgoo.Service:
-		m.RegisterService(name)
+		m.RegisterService(name, v)
+	case bamgoo.Services:
+		for key, svc := range v {
+			target := key
+			if name != "" {
+				target = name + "." + key
+			}
+			m.RegisterService(target, svc)
+		}
 	}
 }
 
@@ -177,12 +194,12 @@ func (m *busModule) RegisterConfigs(configs Configs) {
 }
 
 // RegisterService binds service name into bus subjects.
-func (m *busModule) RegisterService(name string) {
+func (m *busModule) RegisterService(name string, svc bamgoo.Service) {
 	if name == "" {
 		return
 	}
 	m.mutex.Lock()
-	m.services[name] = struct{}{}
+	m.services[name] = serviceMeta{name: svc.Name, desc: svc.Desc}
 	m.mutex.Unlock()
 }
 
@@ -262,6 +279,7 @@ func (m *busModule) Setup() {
 		if cfg.Weight == 0 {
 			cfg.Weight = 1
 		}
+		cfg.Prefix = normalizePrefix(cfg.Prefix)
 		m.configs[name] = cfg
 	}
 }
@@ -384,6 +402,20 @@ func (m *busModule) subjectBase(prefix, name string) string {
 		return name
 	}
 	return prefix + name
+}
+
+func normalizePrefix(prefix string) string {
+	trimmed := strings.TrimSpace(prefix)
+	if trimmed == "" {
+		trimmed = strings.TrimSpace(bamgoo.Project())
+	}
+	if trimmed == "" {
+		trimmed = bamgoo.BAMGOO
+	}
+	if !strings.HasSuffix(trimmed, ".") {
+		trimmed += "."
+	}
+	return trimmed
 }
 
 func (m *busModule) pick() (Connection, string) {
@@ -551,6 +583,135 @@ func (m *busModule) Stats() []bamgoo.ServiceStats {
 	return all
 }
 
+func (m *busModule) ListNodes() []bamgoo.NodeInfo {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	merged := make(map[string]bamgoo.NodeInfo)
+	for _, conn := range m.connections {
+		nodes := conn.ListNodes()
+		for _, item := range nodes {
+			key := item.Project + "|" + item.Node + "|" + item.Role
+			current, ok := merged[key]
+			if !ok {
+				item.Services = uniqueStrings(item.Services)
+				merged[key] = item
+				continue
+			}
+			current.Services = mergeStrings(current.Services, item.Services)
+			if item.Updated > current.Updated {
+				current.Updated = item.Updated
+			}
+			merged[key] = current
+		}
+	}
+
+	out := make([]bamgoo.NodeInfo, 0, len(merged))
+	for _, item := range merged {
+		item.Services = uniqueStrings(item.Services)
+		out = append(out, item)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Project == out[j].Project {
+			if out[i].Role == out[j].Role {
+				return out[i].Node < out[j].Node
+			}
+			return out[i].Role < out[j].Role
+		}
+		return out[i].Project < out[j].Project
+	})
+	return out
+}
+
+func (m *busModule) ListServices() []bamgoo.ServiceInfo {
+	nodes := m.ListNodes()
+	merged := make(map[string]*bamgoo.ServiceInfo)
+	for _, node := range nodes {
+		for _, svc := range node.Services {
+			svcKey := svc
+			info, ok := merged[svcKey]
+			if !ok {
+				meta := m.services[svc]
+				info = &bamgoo.ServiceInfo{
+					Service: svc,
+					Name:    meta.name,
+					Desc:    meta.desc,
+					Nodes:   make([]bamgoo.ServiceNode, 0),
+				}
+				if info.Name == "" {
+					info.Name = svc
+				}
+				merged[svcKey] = info
+			}
+			info.Nodes = append(info.Nodes, bamgoo.ServiceNode{
+				Node: node.Node,
+				Role: node.Role,
+			})
+			if node.Updated > info.Updated {
+				info.Updated = node.Updated
+			}
+		}
+	}
+
+	out := make([]bamgoo.ServiceInfo, 0, len(merged))
+	for _, info := range merged {
+		sort.Slice(info.Nodes, func(i, j int) bool {
+			if info.Nodes[i].Role == info.Nodes[j].Role {
+				return info.Nodes[i].Node < info.Nodes[j].Node
+			}
+			return info.Nodes[i].Role < info.Nodes[j].Role
+		})
+		info.Instances = len(info.Nodes)
+		out = append(out, *info)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Service < out[j].Service
+	})
+	return out
+}
+
+func mergeStrings(a, b []string) []string {
+	if len(a) == 0 {
+		out := make([]string, len(b))
+		copy(out, b)
+		return out
+	}
+	seen := make(map[string]struct{}, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, item := range a {
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	for _, item := range b {
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
+}
+
+func uniqueStrings(in []string) []string {
+	if len(in) == 0 {
+		return []string{}
+	}
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, item := range in {
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func castToMap(value base.Any) (base.Map, bool) {
 	switch v := value.(type) {
 	case base.Map:
@@ -575,4 +736,16 @@ func parseWeight(value base.Any) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+func Stats() []bamgoo.ServiceStats {
+	return module.Stats()
+}
+
+func ListNodes() []bamgoo.NodeInfo {
+	return module.ListNodes()
+}
+
+func ListServices() []bamgoo.ServiceInfo {
+	return module.ListServices()
 }

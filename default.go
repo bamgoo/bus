@@ -2,6 +2,8 @@ package bus
 
 import (
 	"errors"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +28,7 @@ type (
 		running  bool
 		services map[string]struct{}
 		instance *Instance
+		prefix   string
 	}
 )
 
@@ -34,6 +37,7 @@ func (driver *defaultBusDriver) Connect(inst *Instance) (Connection, error) {
 	return &defaultBusConnection{
 		services: make(map[string]struct{}, 0),
 		instance: inst,
+		prefix:   inst.Config.Prefix,
 	}, nil
 }
 
@@ -105,4 +109,66 @@ func (c *defaultBusConnection) Enqueue(_ string, data []byte) error {
 // Stats returns empty stats for in-memory
 func (c *defaultBusConnection) Stats() []bamgoo.ServiceStats {
 	return nil
+}
+
+func (c *defaultBusConnection) ListNodes() []bamgoo.NodeInfo {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	identity := bamgoo.Identity()
+	names := make([]string, 0, len(c.services))
+	for name := range c.services {
+		names = append(names, c.serviceName(name))
+	}
+	sort.Strings(names)
+
+	return []bamgoo.NodeInfo{
+		{
+			Project:  bamgoo.Project(),
+			Node:     identity.Node,
+			Role:     identity.Role,
+			Services: names,
+			Updated:  time.Now().UnixMilli(),
+		},
+	}
+}
+
+func (c *defaultBusConnection) ListServices() []bamgoo.ServiceInfo {
+	nodes := c.ListNodes()
+	if len(nodes) == 0 {
+		return nil
+	}
+	merged := make(map[string]*bamgoo.ServiceInfo)
+	for _, node := range nodes {
+		for _, svc := range node.Services {
+			svcKey := svc
+			info, ok := merged[svcKey]
+			if !ok {
+				info = &bamgoo.ServiceInfo{Service: svc, Name: svc}
+				merged[svcKey] = info
+			}
+			info.Nodes = append(info.Nodes, bamgoo.ServiceNode{
+				Node: node.Node,
+				Role: node.Role,
+			})
+			if node.Updated > info.Updated {
+				info.Updated = node.Updated
+			}
+		}
+	}
+
+	out := make([]bamgoo.ServiceInfo, 0, len(merged))
+	for _, info := range merged {
+		info.Instances = len(info.Nodes)
+		out = append(out, *info)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Service < out[j].Service })
+	return out
+}
+
+func (c *defaultBusConnection) serviceName(subject string) string {
+	if c.prefix == "" {
+		return subject
+	}
+	return strings.TrimPrefix(subject, c.prefix)
 }
