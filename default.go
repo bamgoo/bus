@@ -116,6 +116,10 @@ func (c *defaultBusConnection) ListNodes() []bamgoo.NodeInfo {
 	defer c.mutex.RUnlock()
 
 	identity := bamgoo.Identity()
+	project := identity.Project
+	if project == "" {
+		project = bamgoo.BAMGOO
+	}
 	names := make([]string, 0, len(c.services))
 	for name := range c.services {
 		names = append(names, c.serviceName(name))
@@ -124,9 +128,9 @@ func (c *defaultBusConnection) ListNodes() []bamgoo.NodeInfo {
 
 	return []bamgoo.NodeInfo{
 		{
-			Project:  bamgoo.Project(),
+			Project:  project,
 			Node:     identity.Node,
-			Role:     identity.Role,
+			Profile:  identity.Profile,
 			Services: names,
 			Updated:  time.Now().UnixMilli(),
 		},
@@ -148,8 +152,8 @@ func (c *defaultBusConnection) ListServices() []bamgoo.ServiceInfo {
 				merged[svcKey] = info
 			}
 			info.Nodes = append(info.Nodes, bamgoo.ServiceNode{
-				Node: node.Node,
-				Role: node.Role,
+				Node:    node.Node,
+				Profile: node.Profile,
 			})
 			if node.Updated > info.Updated {
 				info.Updated = node.Updated

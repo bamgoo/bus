@@ -407,7 +407,7 @@ func (m *busModule) subjectBase(prefix, name string) string {
 func normalizePrefix(prefix string) string {
 	trimmed := strings.TrimSpace(prefix)
 	if trimmed == "" {
-		trimmed = strings.TrimSpace(bamgoo.Project())
+		trimmed = strings.TrimSpace(bamgoo.Identity().Project)
 	}
 	if trimmed == "" {
 		trimmed = bamgoo.BAMGOO
@@ -591,7 +591,7 @@ func (m *busModule) ListNodes() []bamgoo.NodeInfo {
 	for _, conn := range m.connections {
 		nodes := conn.ListNodes()
 		for _, item := range nodes {
-			key := item.Project + "|" + item.Node + "|" + item.Role
+			key := item.Project + "|" + item.Node + "|" + item.Profile
 			current, ok := merged[key]
 			if !ok {
 				item.Services = uniqueStrings(item.Services)
@@ -613,10 +613,10 @@ func (m *busModule) ListNodes() []bamgoo.NodeInfo {
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Project == out[j].Project {
-			if out[i].Role == out[j].Role {
+			if out[i].Profile == out[j].Profile {
 				return out[i].Node < out[j].Node
 			}
-			return out[i].Role < out[j].Role
+			return out[i].Profile < out[j].Profile
 		}
 		return out[i].Project < out[j].Project
 	})
@@ -644,8 +644,8 @@ func (m *busModule) ListServices() []bamgoo.ServiceInfo {
 				merged[svcKey] = info
 			}
 			info.Nodes = append(info.Nodes, bamgoo.ServiceNode{
-				Node: node.Node,
-				Role: node.Role,
+				Node:    node.Node,
+				Profile: node.Profile,
 			})
 			if node.Updated > info.Updated {
 				info.Updated = node.Updated
@@ -656,10 +656,10 @@ func (m *busModule) ListServices() []bamgoo.ServiceInfo {
 	out := make([]bamgoo.ServiceInfo, 0, len(merged))
 	for _, info := range merged {
 		sort.Slice(info.Nodes, func(i, j int) bool {
-			if info.Nodes[i].Role == info.Nodes[j].Role {
+			if info.Nodes[i].Profile == info.Nodes[j].Profile {
 				return info.Nodes[i].Node < info.Nodes[j].Node
 			}
-			return info.Nodes[i].Role < info.Nodes[j].Role
+			return info.Nodes[i].Profile < info.Nodes[j].Profile
 		})
 		info.Instances = len(info.Nodes)
 		out = append(out, *info)
