@@ -327,7 +327,9 @@ func (m *busModule) Start() {
 	}
 
 	for _, conn := range m.connections {
-		_ = conn.Start()
+		if err := conn.Start(); err != nil {
+			panic("Failed to start bus: " + err.Error())
+		}
 	}
 
 	fmt.Println("bus module is running.")
