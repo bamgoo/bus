@@ -80,6 +80,7 @@ type (
 		Driver  string
 		Weight  int
 		Prefix  string
+		Group   string
 		Setting base.Map
 	}
 
@@ -95,6 +96,7 @@ const (
 	subjectCall  = "call"
 	subjectQueue = "queue"
 	subjectEvent = "event"
+	subjectGroup = "publish"
 )
 
 type (
@@ -245,6 +247,12 @@ func (m *busModule) configure(name string, conf base.Map) {
 	if v, ok := conf["prefix"].(string); ok {
 		cfg.Prefix = v
 	}
+	if v, ok := conf["group"].(string); ok {
+		cfg.Group = v
+	}
+	if v, ok := conf["profile"].(string); ok {
+		cfg.Group = v
+	}
 	if v, ok := parseWeight(conf["weight"]); ok {
 		cfg.Weight = v
 	}
@@ -278,6 +286,9 @@ func (m *busModule) Setup() {
 		}
 		if cfg.Weight == 0 {
 			cfg.Weight = 1
+		}
+		if strings.TrimSpace(cfg.Group) == "" {
+			cfg.Group = strings.TrimSpace(bamgoo.Identity().Profile)
 		}
 		cfg.Prefix = normalizePrefix(cfg.Prefix)
 		m.configs[name] = cfg
@@ -457,8 +468,8 @@ func (m *busModule) Request(meta *bamgoo.Meta, name string, value base.Map, time
 	return decodeResponse(resBytes)
 }
 
-// Publish broadcasts an event to all subscribers.
-func (m *busModule) Publish(meta *bamgoo.Meta, name string, value base.Map) error {
+// Broadcast sends to all subscribers.
+func (m *busModule) Broadcast(meta *bamgoo.Meta, name string, value base.Map) error {
 	conn, prefix := m.pick()
 
 	if conn == nil {
@@ -473,6 +484,24 @@ func (m *busModule) Publish(meta *bamgoo.Meta, name string, value base.Map) erro
 	baseName := m.subjectBase(prefix, name)
 	subject := m.subject("", subjectEvent, baseName)
 	return conn.Publish(subject, data)
+}
+
+// Publish sends grouped publish: one subscriber per profile(group).
+func (m *busModule) Publish(meta *bamgoo.Meta, name string, value base.Map) error {
+	conn, prefix := m.pick()
+
+	if conn == nil {
+		return errBusNotReady
+	}
+
+	data, err := encodeRequest(meta, name, value)
+	if err != nil {
+		return err
+	}
+
+	baseName := m.subjectBase(prefix, name)
+	subject := m.subject("", subjectGroup, baseName)
+	return conn.Enqueue(subject, data)
 }
 
 // Enqueue sends to a queue (one subscriber receives).
