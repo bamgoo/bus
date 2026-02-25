@@ -361,7 +361,7 @@ func (m *busModule) Start() {
 		}
 	}
 
-	fmt.Println("bus module is running.")
+	fmt.Printf("bamgoo bus module is running with %d connections, %d services.\n", len(m.connections), len(m.services))
 
 	m.started = true
 }
