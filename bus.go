@@ -1,7 +1,6 @@
 package bus
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -13,6 +12,7 @@ import (
 	"github.com/bamgoo/bamgoo"
 	base "github.com/bamgoo/base"
 	"github.com/bamgoo/util"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 var (
@@ -530,12 +530,12 @@ func encodeRequest(meta *bamgoo.Meta, name string, payload base.Map) ([]byte, er
 	if meta != nil {
 		req.Metadata = meta.Metadata()
 	}
-	return json.Marshal(req)
+	return msgpack.Marshal(req)
 }
 
 func decodeRequest(data []byte) (*bamgoo.Meta, string, base.Map, error) {
 	var req busRequest
-	if err := json.Unmarshal(data, &req); err != nil {
+	if err := msgpack.Unmarshal(data, &req); err != nil {
 		return nil, "", nil, err
 	}
 
@@ -559,12 +559,12 @@ func encodeResponse(data base.Map, res base.Res) ([]byte, error) {
 		Time:  time.Now().UnixMilli(),
 		Data:  data,
 	}
-	return json.Marshal(resp)
+	return msgpack.Marshal(resp)
 }
 
 func decodeResponse(data []byte) (base.Map, base.Res) {
 	var resp busResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
+	if err := msgpack.Unmarshal(data, &resp); err != nil {
 		return nil, bamgoo.ErrorResult(err)
 	}
 
