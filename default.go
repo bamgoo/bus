@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bamgoo/bamgoo"
+	"github.com/infrago/infra"
 )
 
 func init() {
-	bamgoo.Register(bamgoo.DEFAULT, &defaultBusDriver{})
+	infra.Register(infra.DEFAULT, &defaultBusDriver{})
 }
 
 var (
@@ -107,18 +107,18 @@ func (c *defaultBusConnection) Enqueue(_ string, data []byte) error {
 }
 
 // Stats returns empty stats for in-memory
-func (c *defaultBusConnection) Stats() []bamgoo.ServiceStats {
+func (c *defaultBusConnection) Stats() []infra.ServiceStats {
 	return nil
 }
 
-func (c *defaultBusConnection) ListNodes() []bamgoo.NodeInfo {
+func (c *defaultBusConnection) ListNodes() []infra.NodeInfo {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
-	identity := bamgoo.Identity()
+	identity := infra.Identity()
 	project := identity.Project
 	if project == "" {
-		project = bamgoo.BAMGOO
+		project = infra.INFRAGO
 	}
 	names := make([]string, 0, len(c.services))
 	for name := range c.services {
@@ -126,7 +126,7 @@ func (c *defaultBusConnection) ListNodes() []bamgoo.NodeInfo {
 	}
 	sort.Strings(names)
 
-	return []bamgoo.NodeInfo{
+	return []infra.NodeInfo{
 		{
 			Project:  project,
 			Node:     identity.Node,
@@ -137,21 +137,21 @@ func (c *defaultBusConnection) ListNodes() []bamgoo.NodeInfo {
 	}
 }
 
-func (c *defaultBusConnection) ListServices() []bamgoo.ServiceInfo {
+func (c *defaultBusConnection) ListServices() []infra.ServiceInfo {
 	nodes := c.ListNodes()
 	if len(nodes) == 0 {
 		return nil
 	}
-	merged := make(map[string]*bamgoo.ServiceInfo)
+	merged := make(map[string]*infra.ServiceInfo)
 	for _, node := range nodes {
 		for _, svc := range node.Services {
 			svcKey := svc
 			info, ok := merged[svcKey]
 			if !ok {
-				info = &bamgoo.ServiceInfo{Service: svc, Name: svc}
+				info = &infra.ServiceInfo{Service: svc, Name: svc}
 				merged[svcKey] = info
 			}
-			info.Nodes = append(info.Nodes, bamgoo.ServiceNode{
+			info.Nodes = append(info.Nodes, infra.ServiceNode{
 				Node:    node.Node,
 				Profile: node.Profile,
 			})
@@ -161,7 +161,7 @@ func (c *defaultBusConnection) ListServices() []bamgoo.ServiceInfo {
 		}
 	}
 
-	out := make([]bamgoo.ServiceInfo, 0, len(merged))
+	out := make([]infra.ServiceInfo, 0, len(merged))
 	for _, info := range merged {
 		info.Instances = len(info.Nodes)
 		out = append(out, *info)

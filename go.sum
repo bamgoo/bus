@@ -1,9 +1,9 @@
-github.com/bamgoo/bamgoo v0.4.0 h1:B1q5WJvQMQyCx6SDW4kHJSd5dhuPRjLR7bQpqIX9STo=
-github.com/bamgoo/bamgoo v0.4.0/go.mod h1:uGbz4EqIvDHqhsxcIdfhOCL0gnujaKEk7gdsA9d2HoA=
-github.com/bamgoo/base v0.4.0 h1:23fmwGRlcR+2ohSA+Sc1wW8buMVSRYM3SBEl0359k7g=
-github.com/bamgoo/base v0.4.0/go.mod h1:9/5EGfQTY7uq8KXMPfE+XbpI9xrdvjai9OdYWB/a7pg=
-github.com/bamgoo/util v0.4.0 h1:rR+meophUX16c/KMHwdJXmBIPjZbfSLMAORtA6Q7WHE=
-github.com/bamgoo/util v0.4.0/go.mod h1:Xs3QvnvyzNyWzakcJK/03u14s6w3Mb1hziAW0ChtfZs=
+github.com/infrago/infra v0.4.0 h1:B1q5WJvQMQyCx6SDW4kHJSd5dhuPRjLR7bQpqIX9STo=
+github.com/infrago/infra v0.4.0/go.mod h1:uGbz4EqIvDHqhsxcIdfhOCL0gnujaKEk7gdsA9d2HoA=
+github.com/infrago/base v0.4.0 h1:23fmwGRlcR+2ohSA+Sc1wW8buMVSRYM3SBEl0359k7g=
+github.com/infrago/base v0.4.0/go.mod h1:9/5EGfQTY7uq8KXMPfE+XbpI9xrdvjai9OdYWB/a7pg=
+github.com/infrago/util v0.4.0 h1:rR+meophUX16c/KMHwdJXmBIPjZbfSLMAORtA6Q7WHE=
+github.com/infrago/util v0.4.0/go.mod h1:Xs3QvnvyzNyWzakcJK/03u14s6w3Mb1hziAW0ChtfZs=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

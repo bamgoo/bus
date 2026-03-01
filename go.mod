@@ -1,4 +1,4 @@
-module github.com/bamgoo/bus
+module github.com/infrago/bus
 
 go 1.25.3
 

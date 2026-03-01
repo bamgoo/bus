@@ -1,2 +1,2 @@
 # bus
-bamgoo bus module.
+infrago bus module.

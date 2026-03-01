@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bamgoo/bamgoo"
-	base "github.com/bamgoo/base"
-	"github.com/bamgoo/util"
+	"github.com/infrago/infra"
+	base "github.com/infrago/base"
+	"github.com/infrago/util"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
@@ -27,7 +27,7 @@ var (
 		weights:     make(map[string]int, 0),
 		services:    make(map[string]serviceMeta, 0),
 	}
-	host = bamgoo.Mount(module)
+	host = infra.Mount(module)
 )
 
 type (
@@ -52,9 +52,9 @@ type (
 		Publish(subject string, data []byte) error
 		Enqueue(subject string, data []byte) error
 
-		Stats() []bamgoo.ServiceStats
-		ListNodes() []bamgoo.NodeInfo
-		ListServices() []bamgoo.ServiceInfo
+		Stats() []infra.ServiceStats
+		ListNodes() []infra.NodeInfo
+		ListServices() []infra.ServiceInfo
 	}
 
 	busModule struct {
@@ -102,7 +102,7 @@ const (
 type (
 	// busRequest combines metadata and payload for transmission.
 	busRequest struct {
-		bamgoo.Metadata
+		infra.Metadata
 		Name    string   `json:"name"`
 		Payload base.Map `json:"payload,omitempty"`
 	}
@@ -129,9 +129,9 @@ func (m *busModule) Register(name string, value base.Any) {
 		m.RegisterConfig(name, v)
 	case Configs:
 		m.RegisterConfigs(v)
-	case bamgoo.Service:
+	case infra.Service:
 		m.RegisterService(name, v)
-	case bamgoo.Services:
+	case infra.Services:
 		for key, svc := range v {
 			target := key
 			if name != "" {
@@ -148,7 +148,7 @@ func (m *busModule) RegisterDriver(name string, driver Driver) {
 	defer m.mutex.Unlock()
 
 	if name == "" {
-		name = bamgoo.DEFAULT
+		name = infra.DEFAULT
 	}
 	if driver == nil {
 		panic("Invalid bus driver: " + name)
@@ -170,7 +170,7 @@ func (m *busModule) RegisterConfig(name string, cfg Config) {
 	}
 
 	if name == "" {
-		name = bamgoo.DEFAULT
+		name = infra.DEFAULT
 	}
 	if _, ok := m.configs[name]; ok {
 		panic("Bus config already registered: " + name)
@@ -189,7 +189,7 @@ func (m *busModule) RegisterConfigs(configs Configs) {
 
 	for name, cfg := range configs {
 		if name == "" {
-			name = bamgoo.DEFAULT
+			name = infra.DEFAULT
 		}
 		if _, ok := m.configs[name]; ok {
 			panic("Bus config already registered: " + name)
@@ -199,7 +199,7 @@ func (m *busModule) RegisterConfigs(configs Configs) {
 }
 
 // RegisterService binds service name into bus subjects.
-func (m *busModule) RegisterService(name string, svc bamgoo.Service) {
+func (m *busModule) RegisterService(name string, svc infra.Service) {
 	if name == "" {
 		return
 	}
@@ -234,7 +234,7 @@ func (m *busModule) Config(global base.Map) {
 		}
 	}
 	if len(rootConfig) > 0 {
-		m.configure(bamgoo.DEFAULT, rootConfig)
+		m.configure(infra.DEFAULT, rootConfig)
 	}
 }
 
@@ -276,22 +276,22 @@ func (m *busModule) Setup() {
 	}
 
 	if len(m.configs) == 0 {
-		m.configs[bamgoo.DEFAULT] = Config{Driver: bamgoo.DEFAULT, Weight: 1}
+		m.configs[infra.DEFAULT] = Config{Driver: infra.DEFAULT, Weight: 1}
 	}
 
 	// normalize configs
 	for name, cfg := range m.configs {
 		if name == "" {
-			name = bamgoo.DEFAULT
+			name = infra.DEFAULT
 		}
 		if cfg.Driver == "" {
-			cfg.Driver = bamgoo.DEFAULT
+			cfg.Driver = infra.DEFAULT
 		}
 		if cfg.Weight == 0 {
 			cfg.Weight = 1
 		}
 		if strings.TrimSpace(cfg.Group) == "" {
-			cfg.Group = strings.TrimSpace(bamgoo.Identity().Profile)
+			cfg.Group = strings.TrimSpace(infra.Identity().Profile)
 		}
 		cfg.Prefix = normalizePrefix(cfg.Prefix)
 		m.configs[name] = cfg
@@ -364,7 +364,7 @@ func (m *busModule) Start() {
 		}
 	}
 
-	fmt.Printf("bamgoo bus module is running with %d connections, %d services.\n", len(m.connections), len(m.services))
+	fmt.Printf("infrago bus module is running with %d connections, %d services.\n", len(m.connections), len(m.services))
 
 	m.started = true
 }
@@ -421,10 +421,10 @@ func (m *busModule) subjectBase(prefix, name string) string {
 func normalizePrefix(prefix string) string {
 	trimmed := strings.TrimSpace(prefix)
 	if trimmed == "" {
-		trimmed = strings.TrimSpace(bamgoo.Identity().Project)
+		trimmed = strings.TrimSpace(infra.Identity().Project)
 	}
 	if trimmed == "" {
-		trimmed = bamgoo.BAMGOO
+		trimmed = infra.INFRAGO
 	}
 	if !strings.HasSuffix(trimmed, ".") {
 		trimmed += "."
@@ -449,30 +449,30 @@ func (m *busModule) pick() (Connection, string) {
 }
 
 // Request sends a request and waits for reply.
-func (m *busModule) Request(meta *bamgoo.Meta, name string, value base.Map, timeout time.Duration) (base.Map, base.Res) {
+func (m *busModule) Request(meta *infra.Meta, name string, value base.Map, timeout time.Duration) (base.Map, base.Res) {
 	conn, prefix := m.pick()
 
 	if conn == nil {
-		return nil, bamgoo.ErrorResult(errBusNotReady)
+		return nil, infra.ErrorResult(errBusNotReady)
 	}
 
 	data, err := encodeRequest(meta, name, value)
 	if err != nil {
-		return nil, bamgoo.ErrorResult(err)
+		return nil, infra.ErrorResult(err)
 	}
 
 	baseName := m.subjectBase(prefix, name)
 	subject := m.subject("", subjectCall, baseName)
 	resBytes, err := conn.Request(subject, data, timeout)
 	if err != nil {
-		return nil, bamgoo.ErrorResult(err)
+		return nil, infra.ErrorResult(err)
 	}
 
 	return decodeResponse(resBytes)
 }
 
 // Broadcast sends to all subscribers.
-func (m *busModule) Broadcast(meta *bamgoo.Meta, name string, value base.Map) error {
+func (m *busModule) Broadcast(meta *infra.Meta, name string, value base.Map) error {
 	conn, prefix := m.pick()
 
 	if conn == nil {
@@ -490,7 +490,7 @@ func (m *busModule) Broadcast(meta *bamgoo.Meta, name string, value base.Map) er
 }
 
 // Publish sends grouped publish: one subscriber per profile(group).
-func (m *busModule) Publish(meta *bamgoo.Meta, name string, value base.Map) error {
+func (m *busModule) Publish(meta *infra.Meta, name string, value base.Map) error {
 	conn, prefix := m.pick()
 
 	if conn == nil {
@@ -508,7 +508,7 @@ func (m *busModule) Publish(meta *bamgoo.Meta, name string, value base.Map) erro
 }
 
 // Enqueue sends to a queue (one subscriber receives).
-func (m *busModule) Enqueue(meta *bamgoo.Meta, name string, value base.Map) error {
+func (m *busModule) Enqueue(meta *infra.Meta, name string, value base.Map) error {
 	conn, prefix := m.pick()
 
 	if conn == nil {
@@ -525,7 +525,7 @@ func (m *busModule) Enqueue(meta *bamgoo.Meta, name string, value base.Map) erro
 	return conn.Enqueue(subject, data)
 }
 
-func encodeRequest(meta *bamgoo.Meta, name string, payload base.Map) ([]byte, error) {
+func encodeRequest(meta *infra.Meta, name string, payload base.Map) ([]byte, error) {
 	req := busRequest{
 		Name:    name,
 		Payload: payload,
@@ -536,13 +536,13 @@ func encodeRequest(meta *bamgoo.Meta, name string, payload base.Map) ([]byte, er
 	return msgpack.Marshal(req)
 }
 
-func decodeRequest(data []byte) (*bamgoo.Meta, string, base.Map, error) {
+func decodeRequest(data []byte) (*infra.Meta, string, base.Map, error) {
 	var req busRequest
 	if err := msgpack.Unmarshal(data, &req); err != nil {
 		return nil, "", nil, err
 	}
 
-	meta := bamgoo.NewMeta()
+	meta := infra.NewMeta()
 	meta.Metadata(req.Metadata)
 
 	if req.Payload == nil {
@@ -553,7 +553,7 @@ func decodeRequest(data []byte) (*bamgoo.Meta, string, base.Map, error) {
 
 func encodeResponse(data base.Map, res base.Res) ([]byte, error) {
 	if res == nil {
-		res = bamgoo.OK
+		res = infra.OK
 	}
 	resp := busResponse{
 		Code:   res.Code(),
@@ -568,7 +568,7 @@ func encodeResponse(data base.Map, res base.Res) ([]byte, error) {
 func decodeResponse(data []byte) (base.Map, base.Res) {
 	var resp busResponse
 	if err := msgpack.Unmarshal(data, &resp); err != nil {
-		return nil, bamgoo.ErrorResult(err)
+		return nil, infra.ErrorResult(err)
 	}
 	if resp.Status == "" && resp.State != "" {
 		resp.Status = resp.State
@@ -577,7 +577,7 @@ func decodeResponse(data []byte) (base.Map, base.Res) {
 		resp.Result = resp.Desc
 	}
 
-	res := bamgoo.Result(resp.Code, resp.Status, resp.Result)
+	res := infra.Result(resp.Code, resp.Status, resp.Result)
 	if resp.Data == nil {
 		resp.Data = base.Map{}
 	}
@@ -607,11 +607,11 @@ func (inst *Instance) HandleAsync(data []byte) error {
 }
 
 // Stats returns service statistics from all connections.
-func (m *busModule) Stats() []bamgoo.ServiceStats {
+func (m *busModule) Stats() []infra.ServiceStats {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
-	var all []bamgoo.ServiceStats
+	var all []infra.ServiceStats
 	for _, conn := range m.connections {
 		stats := conn.Stats()
 		if stats != nil {
@@ -621,11 +621,11 @@ func (m *busModule) Stats() []bamgoo.ServiceStats {
 	return all
 }
 
-func (m *busModule) ListNodes() []bamgoo.NodeInfo {
+func (m *busModule) ListNodes() []infra.NodeInfo {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
-	merged := make(map[string]bamgoo.NodeInfo)
+	merged := make(map[string]infra.NodeInfo)
 	for _, conn := range m.connections {
 		nodes := conn.ListNodes()
 		for _, item := range nodes {
@@ -644,7 +644,7 @@ func (m *busModule) ListNodes() []bamgoo.NodeInfo {
 		}
 	}
 
-	out := make([]bamgoo.NodeInfo, 0, len(merged))
+	out := make([]infra.NodeInfo, 0, len(merged))
 	for _, item := range merged {
 		item.Services = uniqueStrings(item.Services)
 		out = append(out, item)
@@ -661,27 +661,27 @@ func (m *busModule) ListNodes() []bamgoo.NodeInfo {
 	return out
 }
 
-func (m *busModule) ListServices() []bamgoo.ServiceInfo {
+func (m *busModule) ListServices() []infra.ServiceInfo {
 	nodes := m.ListNodes()
-	merged := make(map[string]*bamgoo.ServiceInfo)
+	merged := make(map[string]*infra.ServiceInfo)
 	for _, node := range nodes {
 		for _, svc := range node.Services {
 			svcKey := svc
 			info, ok := merged[svcKey]
 			if !ok {
 				meta := m.services[svc]
-				info = &bamgoo.ServiceInfo{
+				info = &infra.ServiceInfo{
 					Service: svc,
 					Name:    meta.name,
 					Desc:    meta.desc,
-					Nodes:   make([]bamgoo.ServiceNode, 0),
+					Nodes:   make([]infra.ServiceNode, 0),
 				}
 				if info.Name == "" {
 					info.Name = svc
 				}
 				merged[svcKey] = info
 			}
-			info.Nodes = append(info.Nodes, bamgoo.ServiceNode{
+			info.Nodes = append(info.Nodes, infra.ServiceNode{
 				Node:    node.Node,
 				Profile: node.Profile,
 			})
@@ -691,7 +691,7 @@ func (m *busModule) ListServices() []bamgoo.ServiceInfo {
 		}
 	}
 
-	out := make([]bamgoo.ServiceInfo, 0, len(merged))
+	out := make([]infra.ServiceInfo, 0, len(merged))
 	for _, info := range merged {
 		sort.Slice(info.Nodes, func(i, j int) bool {
 			if info.Nodes[i].Profile == info.Nodes[j].Profile {
@@ -776,14 +776,14 @@ func parseWeight(value base.Any) (int, bool) {
 	return 0, false
 }
 
-func Stats() []bamgoo.ServiceStats {
+func Stats() []infra.ServiceStats {
 	return module.Stats()
 }
 
-func ListNodes() []bamgoo.NodeInfo {
+func ListNodes() []infra.NodeInfo {
 	return module.ListNodes()
 }
 
-func ListServices() []bamgoo.ServiceInfo {
+func ListServices() []infra.ServiceInfo {
 	return module.ListServices()
 }
