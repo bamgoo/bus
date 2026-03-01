@@ -1,75 +1,47 @@
 # bus
 
-`bus` 是 infrago 的模块包。
+`bus` 是 infrago 的**模块**。
 
-## 安装
+## 包定位
 
-```bash
-go get github.com/infrago/bus@latest
-```
+- 类型：模块
+- 作用：统一消息总线模块，负责发布/订阅、广播、异步投递。
 
-## 最小接入
+## 主要功能
+
+- 对上提供统一模块接口
+- 对下通过驱动接口接入具体后端
+- 支持按配置切换驱动实现
+
+## 快速接入
 
 ```go
-package main
-
-import (
-    _ "github.com/infrago/bus"
-    "github.com/infrago/infra"
-)
-
-func main() {
-    infra.Run()
-}
+import _ "github.com/infrago/bus"
 ```
-
-## 配置示例
 
 ```toml
 [bus]
 driver = "default"
 ```
 
-## 公开 API（摘自源码）
+## 驱动实现接口列表
 
-- `func (m *busModule) Register(name string, value base.Any)`
-- `func (m *busModule) RegisterDriver(name string, driver Driver)`
-- `func (m *busModule) RegisterConfig(name string, cfg Config)`
-- `func (m *busModule) RegisterConfigs(configs Configs)`
-- `func (m *busModule) RegisterService(name string, svc infra.Service)`
-- `func (m *busModule) Config(global base.Map)`
-- `func (m *busModule) Setup()`
-- `func (m *busModule) Open()`
-- `func (m *busModule) Start()`
-- `func (m *busModule) Stop()`
-- `func (m *busModule) Close()`
-- `func (m *busModule) Request(meta *infra.Meta, name string, value base.Map, timeout time.Duration) (base.Map, base.Res)`
-- `func (m *busModule) Broadcast(meta *infra.Meta, name string, value base.Map) error`
-- `func (m *busModule) Publish(meta *infra.Meta, name string, value base.Map) error`
-- `func (m *busModule) Enqueue(meta *infra.Meta, name string, value base.Map) error`
-- `func (inst *Instance) HandleCall(data []byte) ([]byte, error)`
-- `func (inst *Instance) HandleAsync(data []byte) error`
-- `func (m *busModule) Stats() []infra.ServiceStats`
-- `func (m *busModule) ListNodes() []infra.NodeInfo`
-- `func (m *busModule) ListServices() []infra.ServiceInfo`
-- `func Stats() []infra.ServiceStats`
-- `func ListNodes() []infra.NodeInfo`
-- `func ListServices() []infra.ServiceInfo`
-- `func (driver *defaultBusDriver) Connect(inst *Instance) (Connection, error)`
-- `func (c *defaultBusConnection) Open() error  { return nil }`
-- `func (c *defaultBusConnection) Close() error { return nil }`
-- `func (c *defaultBusConnection) Start() error`
-- `func (c *defaultBusConnection) Stop() error`
-- `func (c *defaultBusConnection) Register(subject string) error`
-- `func (c *defaultBusConnection) Request(_ string, data []byte, _ time.Duration) ([]byte, error)`
-- `func (c *defaultBusConnection) Publish(_ string, data []byte) error`
-- `func (c *defaultBusConnection) Enqueue(_ string, data []byte) error`
-- `func (c *defaultBusConnection) Stats() []infra.ServiceStats`
-- `func (c *defaultBusConnection) ListNodes() []infra.NodeInfo`
-- `func (c *defaultBusConnection) ListServices() []infra.ServiceInfo`
+以下接口由驱动实现（来自模块 `driver.go`）：
 
-## 排错
+- 当前模块未提供独立驱动接口（或 driver.go 不存在）
 
-- 模块未运行：确认空导入已存在
-- driver 无效：确认驱动包已引入
-- 配置不生效：检查配置段名是否为 `[bus]`
+## 全局配置项（所有配置键）
+
+配置段：`[bus]`
+
+- `driver`
+- `prefix`
+- `group`
+- `profile`
+- `weight`
+- `setting`
+
+## 说明
+
+- `setting` 一般用于向具体驱动透传专用参数
+- 多实例配置请参考模块源码中的 Config/configure 处理逻辑
