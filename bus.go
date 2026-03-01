@@ -109,11 +109,14 @@ type (
 
 	// busResponse contains result with full Res info.
 	busResponse struct {
-		Code  int    `json:"code"`
-		State string `json:"state"`
-		Desc  string `json:"desc,omitempty"`
-		Time  int64  `json:"time"`
-		Data  base.Map
+		Code   int    `json:"code"`
+		Status string `json:"status"`
+		Result string `json:"result,omitempty"`
+		// Legacy compatibility with older nodes.
+		State string   `json:"state,omitempty"`
+		Desc  string   `json:"desc,omitempty"`
+		Time  int64    `json:"time"`
+		Data  base.Map `json:"data,omitempty"`
 	}
 )
 
@@ -553,11 +556,11 @@ func encodeResponse(data base.Map, res base.Res) ([]byte, error) {
 		res = bamgoo.OK
 	}
 	resp := busResponse{
-		Code:  res.Code(),
-		State: res.State(),
-		Desc:  res.Error(),
-		Time:  time.Now().UnixMilli(),
-		Data:  data,
+		Code:   res.Code(),
+		Status: res.Status(),
+		Result: res.Error(),
+		Time:   time.Now().UnixMilli(),
+		Data:   data,
 	}
 	return msgpack.Marshal(resp)
 }
@@ -567,8 +570,14 @@ func decodeResponse(data []byte) (base.Map, base.Res) {
 	if err := msgpack.Unmarshal(data, &resp); err != nil {
 		return nil, bamgoo.ErrorResult(err)
 	}
+	if resp.Status == "" && resp.State != "" {
+		resp.Status = resp.State
+	}
+	if resp.Result == "" && resp.Desc != "" {
+		resp.Result = resp.Desc
+	}
 
-	res := bamgoo.Result(resp.Code, resp.State, resp.Desc)
+	res := bamgoo.Result(resp.Code, resp.Status, resp.Result)
 	if resp.Data == nil {
 		resp.Data = base.Map{}
 	}
