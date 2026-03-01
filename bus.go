@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/infrago/infra"
 	base "github.com/infrago/base"
+	"github.com/infrago/infra"
 	"github.com/infrago/util"
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -251,9 +251,6 @@ func (m *busModule) configure(name string, conf base.Map) {
 		cfg.Prefix = v
 	}
 	if v, ok := conf["group"].(string); ok {
-		cfg.Group = v
-	}
-	if v, ok := conf["profile"].(string); ok {
 		cfg.Group = v
 	}
 	if v, ok := parseWeight(conf["weight"]); ok {
